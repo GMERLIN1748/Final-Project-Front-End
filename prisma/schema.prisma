@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ผู้ใช้งาน
+model User {
+  id           String   @id @default(cuid())
+  name         String?
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  borrows Borrow[]
+}
+
+enum Role {
+  ADMIN
+  STAFF
+  USER
+}
+
+// อุปกรณ์ในห้องโปรเจกต์
+model Item {
+  id           Int      @id @default(autoincrement())
+  name         String
+  category     String
+  description  String?
+  totalQty     Int
+  availableQty Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  borrows Borrow[]
+}
+
+// รายการยืม
+model Borrow {
+  id         Int          @id @default(autoincrement())
+  userId     String
+  itemId     Int
+  quantity   Int
+  status     BorrowStatus @default(PENDING)
+  borrowDate DateTime     @default(now())
+  dueDate    DateTime
+  returnedAt DateTime?
+  note       String?
+
+  user User @relation(fields: [userId], references: [id])
+  item Item @relation(fields: [itemId], references: [id])
+}
+
+enum BorrowStatus {
+  PENDING // รออนุมัติ
+  BORROWED // กำลังยืม
+  RETURNED // คืนแล้ว
+}
