@@ -1,36 +1,279 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ระบบยืมอุปกรณ์ห้องโปรเจกต์ CIS
 
-## Getting Started
+เว็บแอปพลิเคชันสำหรับจัดการการยืม-คืนอุปกรณ์ในห้องโปรเจกต์ สาขาวิทยาการคอมพิวเตอร์ (CIS) ผู้ใช้เลือกอุปกรณ์ได้หลายรายการแล้วส่งคำขอยืม เจ้าหน้าที่อนุมัติและรับคืน พร้อมระบบสมาชิก สิทธิ์การใช้งาน การค้นหา/กรองข้อมูล และ API
 
-First, run the development server:
+- **ชื่อ-นามสกุล:** กฤติน อินทร์ตระกูล
+- **รหัสนักศึกษา:** 673450030-6
+- **รายวิชา:** Front-End
+
+## คุณสมบัติตามที่กำหนด
+
+| # | คุณสมบัติ | ทำอย่างไรในระบบนี้ |
+|---|---|---|
+| 1 | CRUD | แสดงรายการ เพิ่ม แก้ไข ลบ **อุปกรณ์** (`/items`) และจัดการ **รายการยืม** (`/borrows`) |
+| 2 | Validation | ตรวจข้อมูลทุกฟอร์มด้วย Zod ฝั่งเซิร์ฟเวอร์ พร้อมแสดงข้อความผิดพลาดใต้ช่องที่กรอกผิด |
+| 3 | Authentication | สมัครสมาชิก/เข้าสู่ระบบด้วย Email และรหัสผ่าน (เข้ารหัสด้วย bcrypt) และ GitHub พร้อมสิทธิ์ 3 ระดับ |
+| 4 | Search + Filter | ค้นหาชื่ออุปกรณ์ กรองหมวดหมู่และสถานะของว่าง กรองรายการยืมตามสถานะ |
+| 5 | API (GET, POST, PUT, DELETE) | `/api/items` และ `/api/items/[id]` (ดูหัวข้อ API) |
+
+## เทคโนโลยีที่ใช้
+
+| เทคโนโลยี | หน้าที่ |
+|---|---|
+| Next.js 16 (App Router) | เฟรมเวิร์กหลัก (หน้าเว็บ, Server Actions, API) |
+| React 19 + TypeScript | ส่วนติดต่อผู้ใช้ |
+| Auth.js (`next-auth@beta`) | ระบบ Authentication |
+| bcryptjs | เข้ารหัสรหัสผ่าน |
+| Zod | ตรวจสอบข้อมูล (Validation) |
+| Prisma 7 + SQLite (`@prisma/adapter-libsql`) | ฐานข้อมูล (ไฟล์ `dev.db`) |
+| Tailwind CSS 4 | จัดรูปแบบหน้าเว็บ (ธีมส้ม-ฟ้า) |
+
+## บทบาทและสิทธิ์
+
+| ความสามารถ | USER | STAFF | ADMIN |
+|---|:-:|:-:|:-:|
+| ดูรายการอุปกรณ์ ค้นหา กรอง | ✅ | ✅ | ✅ |
+| ส่งคำขอยืม (เลือกได้หลายรายการ) | ✅ | ✅ | ✅ |
+| ดูรายการยืม | เฉพาะของตัวเอง | ทั้งหมด | ทั้งหมด |
+| ยกเลิกคำขอของตัวเอง (ตอนรออนุมัติ) | ✅ | ✅ | ✅ |
+| อนุมัติ/ปฏิเสธคำขอ และรับคืน | ❌ | ✅ | ✅ |
+| เพิ่ม แก้ไข ลบอุปกรณ์ | ❌ | ❌ | ✅ |
+| เพิ่มอุปกรณ์ตัวอย่าง / เพิ่มหลายรายการ | ❌ | ❌ | ✅ |
+
+ผู้สมัครใหม่จะเป็น `USER` เสมอ เพื่อป้องกันไม่ให้ใครสมัครแล้วได้สิทธิ์ผู้ดูแลระบบเอง สิทธิ์ถูกตรวจทั้งที่หน้าเว็บและในฝั่งเซิร์ฟเวอร์ทุกครั้ง
+
+## ขั้นตอนการยืม-คืน
+
+```text
+ผู้ใช้เลือกอุปกรณ์ ─▶ ส่งคำขอ ─▶ รออนุมัติ ─▶ กำลังยืม ─▶ คืนแล้ว
+                                  │              │           │
+                          (ของยังไม่ลด)   (ของคงเหลือลด)  (ของคงเหลือเพิ่มกลับ)
+```
+
+- ส่งคำขอหลายรายการพร้อมกันได้ ระบบสร้างรายการยืมแยกแถวละอุปกรณ์ เพื่ออนุมัติและรับคืนทีละชิ้นได้
+- ถ้ามีอุปกรณ์ชิ้นใดมีของไม่พอ ระบบจะไม่สร้างรายการใดเลย และแจ้งว่าชิ้นไหนติดปัญหา
+- รายการที่เลยกำหนดคืนจะแสดงป้าย "เกินกำหนดคืน"
+- อุปกรณ์ที่เคยมีประวัติการยืมจะลบไม่ได้ เพื่อเก็บประวัติไว้
+
+## สิ่งที่ต้องติดตั้งก่อน
+
+1. **Node.js** เวอร์ชัน 20 ขึ้นไป (https://nodejs.org)
+2. **Git** (https://git-scm.com)
+3. (ไม่บังคับ) บัญชี GitHub สำหรับเปิดการเข้าสู่ระบบด้วย GitHub
+
+> โปรเจกต์ไม่ใช้ไลบรารีที่ต้องคอมไพล์ (เช่น `better-sqlite3`) จึงไม่ต้องติดตั้ง Visual Studio Build Tools บน Windows
+
+## วิธีติดตั้ง
+
+**1. ดึงโค้ดและติดตั้งไลบรารี**
+
+```bash
+git clone <URL ของ repository นี้>
+cd <ชื่อโฟลเดอร์>
+npm install
+```
+
+**2. สร้างไฟล์ `.env`** ที่โฟลเดอร์หลัก (ระดับเดียวกับ `package.json`)
+
+```env
+DATABASE_URL="file:./dev.db"
+
+AUTH_SECRET="ข้อความสุ่มยาวๆ สำหรับเข้ารหัส session"
+
+# ไม่บังคับ: ใส่เมื่อต้องการเปิดปุ่มเข้าสู่ระบบด้วย GitHub
+AUTH_GITHUB_ID="Client ID จาก GitHub"
+AUTH_GITHUB_SECRET="Client secret จาก GitHub"
+```
+
+สร้างค่า `AUTH_SECRET` ด้วยคำสั่ง
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+> ชื่อตัวแปรต้องเป็น `AUTH_SECRET` และห้ามนำไฟล์ `.env` ขึ้น GitHub (ถูกกันไว้ใน `.gitignore` แล้ว) ถ้าไม่ใส่ `AUTH_GITHUB_ID` และ `AUTH_GITHUB_SECRET` ระบบจะยังใช้งานได้ตามปกติ แต่ปุ่ม GitHub จะใช้ไม่ได้
+
+**3. สร้างฐานข้อมูลและ Prisma Client**
+
+```bash
+npx prisma migrate dev
+npx prisma generate
+```
+
+**4. รันโปรเจกต์**
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+เปิดเบราว์เซอร์ไปที่ http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### ตั้งค่า GitHub OAuth (ไม่บังคับ)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. GitHub → รูปโปรไฟล์ → **Settings** → **Developer settings** → **OAuth Apps** → **New OAuth App**
+2. กรอกข้อมูล
 
-## Learn More
+| ช่อง | ค่า |
+|---|---|
+| Application name | ชื่ออะไรก็ได้ |
+| Homepage URL | `http://localhost:3000` |
+| Authorization callback URL | `http://localhost:3000/api/auth/callback/github` |
 
-To learn more about Next.js, take a look at the following resources:
+3. คัดลอก Client ID และสร้าง Client secret ไปใส่ในไฟล์ `.env` แล้วรีสตาร์ทเซิร์ฟเวอร์
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+> ผู้ที่เข้าสู่ระบบด้วย GitHub จะไม่ถูกบันทึกในตารางผู้ใช้ จึงเป็น `USER` เสมอ และยืมอุปกรณ์ไม่ได้ (ระบบแจ้งให้สมัครด้วยอีเมลแทน)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## วิธีใช้งาน
 
-## Deploy on Vercel
+### 1. สร้างบัญชีผู้ดูแลระบบ
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+บัญชีที่สมัครใหม่เป็น `USER` ต้องเลื่อนสิทธิ์ด้วยสคริปต์ (Prisma Studio ไม่รองรับฐานข้อมูลแบบไฟล์ SQLite ในโปรเจกต์นี้)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. สมัครบัญชีที่หน้า `/signup`
+2. สร้างไฟล์ `set-role.js` ที่โฟลเดอร์หลัก ด้วยเนื้อหานี้
+
+```js
+const { createClient } = require("@libsql/client");
+
+const email = process.argv[2];
+const role = (process.argv[3] || "ADMIN").toUpperCase();
+
+if (!email || !["ADMIN", "STAFF", "USER"].includes(role)) {
+  console.log("ใช้งาน: node set-role.js อีเมล [ADMIN|STAFF|USER]");
+  process.exit(1);
+}
+
+const c = createClient({ url: "file:./dev.db" });
+
+c.execute({
+  sql: "UPDATE User SET role = ? WHERE email = ?",
+  args: [role, email.toLowerCase()],
+}).then((r) => console.log("แก้ไข", r.rowsAffected, "แถว"));
+```
+
+3. รันคำสั่ง (ปิด `npm run dev` ก่อน)
+
+```bash
+node set-role.js admin@example.com ADMIN
+node set-role.js staff@example.com STAFF
+```
+
+ต้องขึ้น `แก้ไข 1 แถว` แล้ว **ออกจากระบบและเข้าสู่ระบบใหม่** เพื่อให้สิทธิ์ใหม่มีผล (ตรวจได้ที่ `/api/auth/session`)
+
+### 2. เพิ่มอุปกรณ์ (ADMIN)
+
+ที่หน้า `/items` มี 3 วิธี
+
+- **เพิ่มอุปกรณ์ตัวอย่าง** กดปุ่มเดียวได้อุปกรณ์ตัวอย่างหลายสิบรายการ (ข้ามรายการที่ชื่อซ้ำให้อัตโนมัติ)
+- **เพิ่มหลายรายการ** (`/items/bulk`) พิมพ์หรือวางทีละบรรทัดในรูปแบบ `ชื่อ, หมวดหมู่, จำนวน, รายละเอียด` (วางจาก Excel ได้)
+- **+ เพิ่มอุปกรณ์** กรอกฟอร์มทีละรายการ
+
+### 3. ยืมอุปกรณ์ (ผู้ใช้ทั่วไป)
+
+1. กดเมนู **รายการยืม** แล้วกด **+ ยืมอุปกรณ์** (หรือกด **ขอยืม** ที่หน้ารายการอุปกรณ์)
+2. คลิกการ์ดอุปกรณ์ที่ต้องการ เลือกได้หลายรายการ คลิกซ้ำเพื่อยกเลิก ค้นหาหรือกรองหมวดหมู่ได้ รายการที่เลือกไว้จะไม่หายตอนค้นหา
+3. ปรับจำนวนของแต่ละชิ้นด้วยปุ่ม + / − (ไม่เกินของที่ว่าง)
+4. เลือกวันที่คืน (มีปุ่มลัดอีก 3, 7, 14 วัน) และใส่หมายเหตุถ้าต้องการ
+5. กด **ส่งคำขอยืม** รายการจะอยู่ในสถานะ "รออนุมัติ"
+
+### 4. อนุมัติและรับคืน (ADMIN / STAFF)
+
+เปิดหน้า **รายการยืม** จะเห็นรายการของทุกคน กรองตามสถานะได้ที่แท็บด้านบน
+
+- รายการ "รออนุมัติ" → กด **อนุมัติ** หรือ **ปฏิเสธ**
+- รายการ "กำลังยืม" → กด **รับคืน** เมื่อได้รับอุปกรณ์กลับ
+
+## เส้นทางของเว็บ
+
+| เส้นทาง | คำอธิบาย | สิทธิ์ที่ต้องมี |
+|---|---|---|
+| `/signup`, `/login` | สมัครสมาชิก / เข้าสู่ระบบ | ทุกคน |
+| `/` | หน้าแรก สรุปจำนวน | ผู้ที่เข้าสู่ระบบ |
+| `/items` | รายการอุปกรณ์ + ค้นหา + กรอง | ผู้ที่เข้าสู่ระบบ |
+| `/items/create`, `/items/[id]/edit`, `/items/bulk` | เพิ่ม/แก้ไข/เพิ่มหลายรายการ | ADMIN |
+| `/borrows` | รายการยืม + กรองตามสถานะ | ผู้ที่เข้าสู่ระบบ |
+| `/borrows/new` | เลือกอุปกรณ์และส่งคำขอยืม | ผู้ที่เข้าสู่ระบบ |
+| `/unauthorized` | แจ้งว่าไม่มีสิทธิ์ | ทุกคน |
+
+## API
+
+ใช้ร่วมกับระบบสมาชิกเดิม ต้องเข้าสู่ระบบก่อน (เรียกจากเบราว์เซอร์ที่ login อยู่ หรือแนบคุกกี้ session) การเขียนข้อมูลต้องเป็น `ADMIN` และข้อมูลที่ส่งมาถูกตรวจด้วย Zod ชุดเดียวกับหน้าเว็บ
+
+| เมธอด | เส้นทาง | หน้าที่ | สิทธิ์ |
+|---|---|---|---|
+| GET | `/api/items` | ดึงรายการอุปกรณ์ รับ `?q=`, `?category=`, `?stock=available\|out` | ผู้ที่เข้าสู่ระบบ |
+| POST | `/api/items` | เพิ่มอุปกรณ์ | ADMIN |
+| GET | `/api/items/[id]` | ดูอุปกรณ์ 1 รายการ | ผู้ที่เข้าสู่ระบบ |
+| PUT | `/api/items/[id]` | แก้ไขอุปกรณ์ | ADMIN |
+| DELETE | `/api/items/[id]` | ลบอุปกรณ์ | ADMIN |
+
+ตัวอย่างข้อมูลที่ส่งให้ POST และ PUT
+
+```json
+{
+  "name": "เมาส์เกมมิ่ง",
+  "category": "อุปกรณ์ต่อพ่วง",
+  "description": "แบบมีสาย",
+  "totalQty": 5
+}
+```
+
+รหัสตอบกลับ: `200` สำเร็จ, `201` สร้างสำเร็จ, `400` ข้อมูลไม่ถูกต้อง, `401` ยังไม่ได้เข้าสู่ระบบ, `403` ไม่มีสิทธิ์, `404` ไม่พบข้อมูล, `409` ลบไม่ได้เพราะมีประวัติการยืม
+
+ทดสอบเร็วๆ ได้โดยเข้าสู่ระบบแล้วเปิด `http://localhost:3000/api/items?q=ไมค์&category=เครื่องเสียงและดนตรี` ในแท็บเดียวกันของเบราว์เซอร์
+
+## โครงสร้างโปรเจกต์
+
+```text
+app/
+├── auth.ts                        # ตั้งค่า Auth.js (Credentials + GitHub)
+├── layout.tsx, page.tsx           # โครงหน้าหลัก + เมนู, หน้าแรก
+├── login/, signup/, unauthorized/ # ระบบสมาชิกและหน้าแจ้งสิทธิ์
+├── items/                         # CRUD อุปกรณ์ (page, create, [id]/edit, bulk)
+│   ├── actions.ts, validation.ts  # Server Actions และ Zod Schema
+│   ├── seed.ts, bulk-actions.ts   # เพิ่มอุปกรณ์ตัวอย่าง / เพิ่มหลายรายการ
+│   └── loading.tsx, error.tsx, not-found.tsx
+├── borrows/                       # รายการยืม และหน้า new (เลือกอุปกรณ์)
+│   ├── actions.ts, validation.ts
+├── api/
+│   ├── auth/[...nextauth]/route.ts
+│   └── items/ (route.ts, [id]/route.ts)
+├── ui/                            # คอมโพเนนต์ (เมนู, ฟอร์ม, ตัวเลือกอุปกรณ์ ฯลฯ)
+└── lib/prisma.ts                  # ตัวเชื่อมต่อฐานข้อมูล
+prisma/schema.prisma               # ตาราง User, Item, Borrow
+prisma.config.ts                   # ค่าตั้งต้นของ Prisma 7
+types/next-auth.d.ts               # ประกาศ type ของ role
+```
+
+## ฐานข้อมูล
+
+| ตาราง | ข้อมูลหลัก |
+|---|---|
+| `User` | ชื่อ, อีเมล (ไม่ซ้ำ), รหัสผ่านที่เข้ารหัสแล้ว, บทบาท (`ADMIN` / `STAFF` / `USER`) |
+| `Item` | ชื่อ, หมวดหมู่, รายละเอียด, จำนวนทั้งหมด, จำนวนคงเหลือ |
+| `Borrow` | ผู้ยืม, อุปกรณ์, จำนวน, วันที่ยืม, กำหนดคืน, วันที่คืนจริง, สถานะ (`PENDING` / `BORROWED` / `RETURNED`), หมายเหตุ |
+
+## หมายเหตุด้านความปลอดภัย
+
+- รหัสผ่านถูกเข้ารหัสด้วย bcrypt (cost 12) ไม่เก็บรหัสผ่านจริง
+- ตรวจสิทธิ์ทั้งที่หน้าเว็บและใน Server Action/API ทุกครั้ง การซ่อนปุ่มอย่างเดียวไม่เพียงพอ
+- การอนุมัติและการรับคืนทำในธุรกรรมเดียว (transaction) เพื่อให้จำนวนคงเหลือถูกต้องเสมอ
+- ห้ามเผยแพร่ค่า `AUTH_SECRET` และ `AUTH_GITHUB_SECRET`
+
+## การแก้ปัญหาเบื้องต้น
+
+| อาการ | วิธีแก้ |
+|---|---|
+| `no such table: main.User` | ยังไม่ได้สร้างตาราง รัน `npx prisma migrate dev` แล้ว `npx prisma generate` |
+| `datasource.url property is required` | ตรวจว่ามี `prisma.config.ts` และมี `DATABASE_URL` ในไฟล์ `.env` |
+| เปลี่ยนเป็น ADMIN แล้วยังเป็น USER | ออกจากระบบแล้วเข้าสู่ระบบใหม่ และเช็กที่ `/api/auth/session` |
+| ขึ้นข้อผิดพลาดเรื่อง secret ตอน login | ตรวจว่าตัวแปรชื่อ `AUTH_SECRET` แล้วรีสตาร์ทเซิร์ฟเวอร์ |
+| GitHub แจ้ง `redirect_uri` ไม่ตรง | ตรวจ callback URL ให้เป็น `http://localhost:3000/api/auth/callback/github` |
+| `Prisma Studio is not supported` | ใช้สคริปต์ `set-role.js` ตามหัวข้อวิธีใช้งานแทน |
+| หน้า `/borrows/new` ไม่มีอุปกรณ์ | ยังไม่มีอุปกรณ์ในระบบ ให้บัญชี ADMIN กด "เพิ่มอุปกรณ์ตัวอย่าง" ที่หน้า `/items` |
+| `npm install` ขึ้น `ECONNRESET` | เครือข่ายหลุด รันซ้ำ หรือใช้ `npm install --fetch-retries=5` |
+| `Another next dev server is already running` | ใช้เซิร์ฟเวอร์ตัวเดิม หรือปิดด้วย `taskkill /F /IM node.exe` แล้วรันใหม่ |
+
+## ผู้จัดทำ
+
+นายกฤติน อินทร์ตระกูล 673450030-6
